@@ -161,7 +161,7 @@ final class rex_parsedown extends ParsedownExtra
     /**
      * @return array|null
      */
-    protected function blockSetextHeader($Line, array $Block = [])
+    protected function blockSetextHeader($Line, ?array $Block = null)
     {
         $block = parent::blockSetextHeader($Line, $Block);
 
@@ -181,15 +181,13 @@ final class rex_parsedown extends ParsedownExtra
         }
 
         /** @psalm-suppress MixedArrayAccess */
-        if ('language-php' !== ($Block['element']['text']['attributes']['class'] ?? null)) {
+        $element = rex_type::array($Block['element']['element']);
+
+        if ('language-php' !== ($element['attributes']['class'] ?? null)) {
             return $Block;
         }
 
-        /**
-         * @var string $text
-         * @psalm-suppress MixedArrayAccess
-         */
-        $text = $Block['element']['text']['text'];
+        $text = rex_type::string($element['text']);
 
         $missingPhpStart = !str_contains($text, '<?php') && !str_contains($text, '<?=');
         if ($missingPhpStart) {
@@ -212,8 +210,7 @@ final class rex_parsedown extends ParsedownExtra
 
         /** @psalm-suppress MixedArrayAssignment */
         $Block['element']['rawHtml'] = $text;
-        /** @psalm-suppress MixedArrayAccess */
-        unset($Block['element']['text'], $Block['element']['handler']);
+        unset($Block['element']['element']);
 
         return $Block;
     }
@@ -231,10 +228,12 @@ final class rex_parsedown extends ParsedownExtra
             return $block;
         }
 
-        [$level] = sscanf($block['element']['name'], 'h%d');
+        $element = rex_type::array($block['element']);
 
-        $plainText = strip_tags($this->{$block['element']['handler']}($block['element']['text']));
-        $plainText = htmlspecialchars_decode($plainText);
+        [$level] = sscanf(rex_type::string($element['name']), 'h%d');
+
+        $plainText = rex_type::string($this->element($element));
+        $plainText = htmlspecialchars_decode(strip_tags($plainText));
 
         if (!isset($block['element']['attributes']['id'])) {
             $baseId = $id = rex_string::normalize($plainText, '-');
