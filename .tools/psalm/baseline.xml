@@ -2405,6 +2405,18 @@
       <code><![CDATA[setIsActive]]></code>
     </PossiblyNullReference>
   </file>
+  <file src="redaxo/src/addons/structure/plugins/content/fragments/slice_list.php">
+    <MixedArgument>
+      <code><![CDATA[$this->content]]></code>
+    </MixedArgument>
+  </file>
+  <file src="redaxo/src/addons/structure/plugins/content/fragments/slice_list_item.php">
+    <MixedArgument>
+      <code><![CDATA[$this->attributes ?? []]]></code>
+      <code><![CDATA[$this->content]]></code>
+      <code><![CDATA[$this->formAction]]></code>
+    </MixedArgument>
+  </file>
   <file src="redaxo/src/addons/structure/plugins/content/lib/api_module.php">
     <MixedReturnStatement>
       <code><![CDATA[$mapping]]></code>
