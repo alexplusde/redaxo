@@ -73,7 +73,8 @@ All core classes use the `rex_` prefix (e.g., `rex_sql`, `rex_addon`, `rex_file`
 - PHPStan level 6 + Psalm level 1, both with baselines in `.tools/phpstan/` and `.tools/psalm/`
 - PHPUnit strict mode: warnings, notices, deprecations all fail the build
 - In YAML files, prefer single quotes when quoting is needed
-- Comments and commit messages in English; commits use conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`, `style:`, `ci:`)
+- Comments and commit messages in English; commits use conventional commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`, `style:`, `ci:`). The same rules (English + conventional commit prefix) apply to PR titles, since they become the commit message on squash merge
+- Don't write bare `@name` tokens in commit messages (e.g. annotations like `@internal`/`@deprecated`, or anything that looks like a username): GitHub autolinks them into user mentions and pings a random account. Wrap them in backticks (`` `@internal` ``) — GitHub renders code spans in commit messages and doesn't link mentions inside them
 
 ### Baselines
 The static analysis baselines exist to grandfather pre-existing issues. **New code must not add to the baselines** — fix the issue instead. Only regenerate baselines (`composer baseline`) when intentionally accepting new findings, and call that out in the PR.
@@ -85,4 +86,5 @@ REDAXO has a large addon ecosystem; public APIs are part of the contract:
 - Don't change signatures, remove public methods, or rename public classes/constants on the `5.x` branch — deprecate via `@deprecated` and keep a working shim.
 - `@internal`-marked symbols may change without notice.
 - New parameters on public methods must be optional.
+- Mark new classes `@internal` by default. Only omit it when the class is deliberately part of the public API. In that case, review every public property, constant, and method individually and mark `@internal` each one that isn't meant to be a public contract — public visibility alone shouldn't lock you into supporting it.
 - DB schema changes belong in the relevant addon's install/update path.
