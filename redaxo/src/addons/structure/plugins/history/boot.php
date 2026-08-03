@@ -27,8 +27,12 @@ if ('' != $historyDate) {
             if ($login->checkTempSession($historyLogin, $historySession, $historyValidtime)) {
                 $user = $login->getUser();
                 rex::setProperty('user', $user);
-                rex_extension::register('OUTPUT_FILTER', static function (rex_extension_point $ep) use ($login) {
+
+                // A shutdown function (not an OUTPUT_FILTER) so cleanup runs even when the request aborts
+                // before output — e.g. a bogus rex-api-call — which would otherwise leave a usable session.
+                register_shutdown_function(static function () use ($login) {
                     $login->deleteSession();
+                    rex_user_session::getInstance()->clearCurrentSession();
                 });
             }
         }
@@ -198,7 +202,7 @@ if (rex::isBackend() && rex::getUser()?->hasPerm('history[article_rollback]')) {
                 $userLogin = $user->getLogin();
                 $historyValidTime = new DateTime();
                 $historyValidTime = $historyValidTime->modify('+10 Minutes')->format('YmdHis'); // 10 minutes valid key
-                $userHistorySession = rex_history_login::createSessionKey($userLogin, $user->getValue('session_id'), $historyValidTime);
+                $userHistorySession = rex_history_login::createSessionKey($userLogin, $historyValidTime);
                 $articleLink = rex_getUrl(rex_article::getCurrentId(), rex_clang::getCurrentId(), ['rex_history_login' => $userLogin, 'rex_history_session' => $userHistorySession, 'rex_history_validtime' => $historyValidTime], '&');
             }
 
