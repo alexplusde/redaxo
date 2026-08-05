@@ -141,12 +141,19 @@ class rex_sql_table
             $this->indexesExisting[$indexName] = $indexName;
         }
 
+        // KEY_COLUMN_USAGE spans all schemas and also lists unique/primary keys, so the join must be qualified.
+        // INFORMATION_SCHEMA gives no ordering guarantee, and the column order of a composite key ends up in the DDL.
         /** @var list<array{CONSTRAINT_NAME: string, COLUMN_NAME: string, REFERENCED_TABLE_NAME: string, REFERENCED_COLUMN_NAME: string, UPDATE_RULE: rex_sql_foreign_key::*, DELETE_RULE: rex_sql_foreign_key::*}> $foreignKeyParts */
         $foreignKeyParts = $this->sql->getArray('
             SELECT c.CONSTRAINT_NAME, c.REFERENCED_TABLE_NAME, c.UPDATE_RULE, c.DELETE_RULE, k.COLUMN_NAME, k.REFERENCED_COLUMN_NAME
             FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS c
-            INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k ON c.CONSTRAINT_NAME = k.CONSTRAINT_NAME
-            WHERE c.CONSTRAINT_SCHEMA = DATABASE() AND c.TABLE_NAME = ?', [$name]);
+            INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k
+                ON c.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+                AND c.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+                AND c.TABLE_NAME = k.TABLE_NAME
+                AND k.POSITION_IN_UNIQUE_CONSTRAINT IS NOT NULL
+            WHERE c.CONSTRAINT_SCHEMA = DATABASE() AND c.TABLE_NAME = ?
+            ORDER BY c.CONSTRAINT_NAME, k.ORDINAL_POSITION', [$name]);
         $foreignKeys = [];
         foreach ($foreignKeyParts as $part) {
             $foreignKeys[$part['CONSTRAINT_NAME']][] = $part;
