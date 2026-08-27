@@ -9,6 +9,10 @@ on:
 permissions:
     contents: read
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
 jobs:
     phpunit:
         runs-on: ${{ matrix.os || 'ubuntu-latest' }}
@@ -19,20 +23,20 @@ jobs:
         strategy:
             matrix:
                 include:
-                    -   php-version: '8.1'
-                        db-image: 'mysql:5.6'
-                    -   php-version: '8.2'
-                        db-image: 'mysql:5.7'
                     -   php-version: '8.3'
-                        db-image: 'mysql:8.0'
+                        db-image: 'mysql:5.6'
                     -   php-version: '8.4'
-                        db-image: 'mysql:8.4'
+                        db-image: 'mysql:5.7'
+                    -   php-version: '8.4'
+                        db-image: 'mysql:8.0'
                     -   php-version: '8.5'
+                        db-image: 'mysql:8.4'
+                    -   php-version: '8.6'
                         db-image: 'mysql:latest'
                         composer-flags: '--ignore-platform-req=php'
-                    -   php-version: '8.1'
+                    -   php-version: '8.3'
                         db-image: 'mariadb:10.1'
-                    -   php-version: '8.4'
+                    -   php-version: '8.5'
                         db-image: 'mariadb:latest'
 
         # https://docs.github.com/en/free-pro-team@latest/actions/guides/about-service-containers
@@ -50,17 +54,17 @@ jobs:
 
         steps:
             -   name: Checkout
-                uses: actions/checkout@v6
+                uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
             -   name: Setup PHP
-                uses: shivammathur/setup-php@v2
+                uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
                 with:
                     php-version: ${{ matrix.php-version }}
                     extensions: gd, intl, pdo_mysql
                     coverage: none # disable xdebug, pcov
 
             -   name: Composer install
-                uses: ramsey/composer-install@v3
+                uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
                 with:
                     composer-options: ${{ matrix.composer-flags }}
 

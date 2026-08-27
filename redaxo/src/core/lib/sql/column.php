@@ -32,9 +32,7 @@ class rex_sql_column
         return $this;
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public function isModified()
     {
         return $this->modified;
@@ -52,9 +50,7 @@ class rex_sql_column
         return $this->setModified(true);
     }
 
-    /**
-     * @return string
-     */
+    /** @return string */
     public function getName()
     {
         return $this->name;
@@ -72,9 +68,7 @@ class rex_sql_column
         return $this->setModified(true);
     }
 
-    /**
-     * @return string The column type, including its size, e.g. int(10) or varchar(255)
-     */
+    /** @return string The column type, including its size, e.g. int(10) or varchar(255) */
     public function getType()
     {
         return $this->type;
@@ -92,9 +86,7 @@ class rex_sql_column
         return $this->setModified(true);
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public function isNullable()
     {
         return $this->nullable;
@@ -112,9 +104,7 @@ class rex_sql_column
         return $this->setModified(true);
     }
 
-    /**
-     * @return string|null
-     */
+    /** @return string|null */
     public function getDefault()
     {
         return $this->default;
@@ -132,9 +122,7 @@ class rex_sql_column
         return $this->setModified(true);
     }
 
-    /**
-     * @return string|null
-     */
+    /** @return string|null */
     public function getExtra()
     {
         return $this->extra;
@@ -152,25 +140,79 @@ class rex_sql_column
         return $this->setModified(true);
     }
 
-    /**
-     * @return string|null
-     */
+    /** @return string|null */
     public function getComment()
     {
         return $this->comment;
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public function equals(self $column)
     {
         return
             $this->name === $column->name
             && $this->type === $column->type
             && $this->nullable === $column->nullable
-            && $this->default === $column->default
-            && $this->extra === $column->extra
+            && self::normalizeDefault($this->type, $this->default) === self::normalizeDefault($column->type, $column->default)
+            && self::normalizeExtra($this->extra) === self::normalizeExtra($column->extra)
             && $this->comment === $column->comment;
+    }
+
+    /**
+     * Whether the default value is the current timestamp function instead of a literal value.
+     *
+     * @internal
+     */
+    public function hasCurrentTimestampDefault(): bool
+    {
+        return null !== $this->default && self::isCurrentTimestamp($this->type, $this->default);
+    }
+
+    /**
+     * Normalizes the spelling of a default value to the form used by MySQL.
+     *
+     * @internal
+     */
+    public static function normalizeDefault(string $type, ?string $default): ?string
+    {
+        if (null === $default || !self::isCurrentTimestamp($type, $default)) {
+            return $default;
+        }
+
+        return self::normalizeCurrentTimestamp($default);
+    }
+
+    /**
+     * Normalizes an extra clause (like `on update current_timestamp()`) to the form used by MySQL.
+     *
+     * @internal
+     */
+    public static function normalizeExtra(?string $extra): ?string
+    {
+        if (null === $extra) {
+            return null;
+        }
+
+        // Since MySQL 8.0.13 an expression default value is reported as `DEFAULT_GENERATED`, which is
+        // not part of a column definition and would break the generated SQL.
+        $extra = preg_replace('/^DEFAULT_GENERATED\s*/i', '', $extra) ?? $extra;
+
+        return '' === $extra ? null : self::normalizeCurrentTimestamp($extra);
+    }
+
+    private static function isCurrentTimestamp(string $type, string $default): bool
+    {
+        return 1 === preg_match('/^(?:timestamp|datetime)(?:\(\d+\))?$/i', $type)
+            && 1 === preg_match('/^current_timestamp(?:\(\s*\d*\s*\))?$/i', $default);
+    }
+
+    /** MySQL spells the function as `CURRENT_TIMESTAMP`, MariaDB as `current_timestamp()`. */
+    private static function normalizeCurrentTimestamp(string $value): string
+    {
+        return preg_replace_callback(
+            '/current_timestamp(?:\(\s*(\d*)\s*\))?/i',
+            static fn (array $match) => 'CURRENT_TIMESTAMP' . (('' === ($match[1] ?? '')) ? '' : '(' . $match[1] . ')'),
+            $value,
+        ) ?? $value;
     }
 }

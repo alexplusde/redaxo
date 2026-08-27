@@ -152,6 +152,7 @@ class rex
      *     ($key is 'debug' ? array{enabled: bool, throw_always_exception: bool|int} :
      *     ($key is 'lang_fallback' ? string[] :
      *     ($key is 'use_accesskeys' ? bool :
+     *     ($key is 'use_directory_protection_check' ? bool :
      *     ($key is 'accesskeys' ? array<string, string> :
      *     ($key is 'editor' ? string|null :
      *     ($key is 'editor_basepath' ? string|null :
@@ -175,7 +176,7 @@ class rex
      *     ($key is 'system_addons' ? non-empty-string[] :
      *     ($key is 'setup_addons' ? non-empty-string[] :
      *     mixed|null
-     *     )))))))))))))))))))))))))))
+     *     ))))))))))))))))))))))))))))
      * ) The value for $key or $default if $key cannot be found
      */
     public static function getProperty($key, $default = null)
@@ -315,9 +316,7 @@ class rex
         return PHP_SESSION_ACTIVE == session_status() && rex_session('safemode', 'boolean', false);
     }
 
-    /**
-     * Returns if the live mode is active.
-     */
+    /** Returns if the live mode is active. */
     public static function isLiveMode(): bool
     {
         return (bool) self::getProperty('live_mode');
@@ -512,9 +511,7 @@ class rex
         return rex_type::array(self::getConfig('package-config', []));
     }
 
-    /**
-     * @return list<non-empty-string>
-     */
+    /** @return list<non-empty-string> */
     public static function getPackageOrder(): array
     {
         return rex_type::array(self::getConfig('package-order', []));
@@ -589,9 +586,7 @@ class rex
         return null;
     }
 
-    /**
-     * @internal
-     */
+    /** @internal */
     public static function loadConfigYml(): void
     {
         $cacheFile = rex_path::coreCache('config.yml.cache');

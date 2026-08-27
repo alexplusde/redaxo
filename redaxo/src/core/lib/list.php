@@ -66,6 +66,11 @@ class rex_list implements rex_url_provider_interface
     // --------- List Attributes
     /** @var string */
     private $name;
+    private string $query;
+    /** @var array<string, 'asc'|'desc'> */
+    private array $defaultSort;
+    private string $executedQuery;
+    private bool $dataLoaded = false;
     /** @var array<string, string|int> */
     private array $params;
     private int $rows;
@@ -139,6 +144,8 @@ class rex_list implements rex_url_provider_interface
         $this->debug = $debug;
         $this->sql->setDebug($this->debug);
         $this->name = $listName;
+        $this->query = $query;
+        $this->defaultSort = $defaultSort;
         $this->caption = '';
         $this->rows = 0;
         $this->params = [];
@@ -186,9 +193,14 @@ class rex_list implements rex_url_provider_interface
         }
 
         // --------- Load Data
-        $this->sql->setQuery($this->prepareQuery($query, $defaultSort));
-        if (self::DISABLE_PAGINATION === $rowsPerPage) {
-            $this->rows = (int) $this->sql->getRows();
+        if (rex_request('list', 'string') == $this->getName() && '' !== rex_request('sort', 'string', '')) {
+            // The requested sort column can not be validated yet since the sortable columns are registered
+            // after construction (getSortColumn() checks against them). Fetch only the field names here,
+            // the data is loaded in get() after the sortable columns are known.
+            $this->executedQuery = 'SELECT * FROM (' . $query . ') t LIMIT 0';
+            $this->sql->setQuery($this->executedQuery);
+        } else {
+            $this->loadData();
         }
 
         foreach ($this->sql->getFieldnames() as $columnName) {
@@ -219,9 +231,7 @@ class rex_list implements rex_url_provider_interface
         return new $class($query, $rowsPerPage, $listName, $debug, $db, $defaultSort);
     }
 
-    /**
-     * @return void
-     */
+    /** @return void */
     public function init()
     {
         // nichts tun
@@ -290,9 +300,7 @@ class rex_list implements rex_url_provider_interface
         $this->noRowsMessage = $message;
     }
 
-    /**
-     * @return string
-     */
+    /** @return string */
     public function getNoRowsMessage()
     {
         return $this->noRowsMessage;
@@ -308,17 +316,13 @@ class rex_list implements rex_url_provider_interface
         $this->params[$name] = $value;
     }
 
-    /**
-     * @return array<string, string|int>
-     */
+    /** @return array<string, string|int> */
     public function getParams()
     {
         return $this->params;
     }
 
-    /**
-     * @return void
-     */
+    /** @return void */
     protected function loadBackendConfig()
     {
         $this->addParam('page', rex_be_controller::getCurrentPage());
@@ -334,9 +338,7 @@ class rex_list implements rex_url_provider_interface
         $this->tableAttributes[$name] = $value;
     }
 
-    /**
-     * @return array<string, string|int>
-     */
+    /** @return array<string, string|int> */
     public function getTableAttributes()
     {
         return $this->tableAttributes;
@@ -352,9 +354,7 @@ class rex_list implements rex_url_provider_interface
         $this->formAttributes[$name] = $value;
     }
 
-    /**
-     * @return array<string, string|int>
-     */
+    /** @return array<string, string|int> */
     public function getFormAttributes()
     {
         return $this->formAttributes;
@@ -371,9 +371,7 @@ class rex_list implements rex_url_provider_interface
         $this->linkAttributes[$columnName][$attrName] = $attrValue;
     }
 
-    /**
-     * @return array<string, string|int>|null
-     */
+    /** @return array<string, string|int>|null */
     public function getLinkAttributes($column, $default = null)
     {
         return $this->linkAttributes[$column] ?? $default;
@@ -415,7 +413,7 @@ class rex_list implements rex_url_provider_interface
      * @param string $columnHead Titel der Spalte
      * @param string $columnBody Text/Format der Spalte
      * @param int $columnIndex Stelle, an der die neue Spalte erscheinen soll
-     * @param array $columnLayout Layout der Spalte
+     * @param array{string, string} $columnLayout Layout der Spalte
      * @return void
      */
     public function addColumn($columnHead, $columnBody, $columnIndex = -1, $columnLayout = null)
@@ -445,7 +443,7 @@ class rex_list implements rex_url_provider_interface
      * Methode, um das Layout einer Spalte zu setzen.
      *
      * @param string $columnHead Titel der Spalte
-     * @param array $columnLayout Layout der Spalte
+     * @param array{string, string} $columnLayout Layout der Spalte
      * @return void
      */
     public function setColumnLayout($columnHead, $columnLayout)
@@ -501,9 +499,7 @@ class rex_list implements rex_url_provider_interface
         return $this->columnNames;
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     protected function getEnabledColumnNames(): array
     {
         $columnNames = [];
@@ -776,9 +772,7 @@ class rex_list implements rex_url_provider_interface
         }
     }
 
-    /**
-     * @return array<int, array>
-     */
+    /** @return array<int, array> */
     public function getTableColumnGroups()
     {
         return $this->tableColumnGroups;
@@ -952,12 +946,36 @@ class rex_list implements rex_url_provider_interface
     }
 
     /**
+     * Executes the query unless it already ran and the effective query is still the same
+     * (it changes when columns are marked as sortable after construction).
+     */
+    private function loadData(): void
+    {
+        $query = $this->prepareQuery($this->query, $this->defaultSort);
+        if ($this->dataLoaded && $query === $this->executedQuery) {
+            return;
+        }
+
+        $this->dataLoaded = true;
+        $this->executedQuery = $query;
+        $this->sql->setQuery($query);
+
+        if (null === $this->pager) {
+            $this->rows = (int) $this->sql->getRows();
+        }
+    }
+
+    /**
      * Gibt die Anzahl der Zeilen zurück, welche vom ursprüngliche SQL Statement betroffen werden.
      *
      * @return int
      */
     public function getRows()
     {
+        if (!$this->dataLoaded) {
+            $this->loadData();
+        }
+
         return $this->rows;
     }
 
@@ -994,7 +1012,10 @@ class rex_list implements rex_url_provider_interface
     public function getSortColumn($default = null)
     {
         if (rex_request('list', 'string') == $this->getName()) {
-            return rex_request('sort', 'string', $default);
+            $sortColumn = rex_request('sort', 'string', $default);
+            if (null !== $sortColumn && $this->hasColumnOption($sortColumn, REX_LIST_OPT_SORT)) {
+                return $sortColumn;
+            }
         }
         return $default;
     }
@@ -1116,9 +1137,7 @@ class rex_list implements rex_url_provider_interface
         return $value;
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public function isCustomFormat($format)
     {
         return is_array($format) && isset($format[0]) && 'custom' == $format[0];
@@ -1173,9 +1192,7 @@ class rex_list implements rex_url_provider_interface
         return '';
     }
 
-    /**
-     * @return string
-     */
+    /** @return string */
     protected function _getAttributeString($array)
     {
         $s = '';
@@ -1187,9 +1204,7 @@ class rex_list implements rex_url_provider_interface
         return $s;
     }
 
-    /**
-     * @return string
-     */
+    /** @return string */
     public function getColumnLink($columnName, $columnValue, $params = [])
     {
         $attributes = $this->getLinkAttributes($columnName, []);
@@ -1205,6 +1220,12 @@ class rex_list implements rex_url_provider_interface
      */
     public function getValue($column)
     {
+        // only initial loading here, no unconditional loadData(): the query (and with it the
+        // result pointer) must not change anymore while the rows are iterated in get()
+        if (!$this->dataLoaded) {
+            $this->loadData();
+        }
+
         return $this->customColumns[$column] ?? $this->sql->getValue($column);
     }
 
@@ -1225,6 +1246,10 @@ class rex_list implements rex_url_provider_interface
     public function get()
     {
         rex_extension::registerPoint(new rex_extension_point('REX_LIST_GET', $this, [], true));
+
+        // By now the sortable columns are registered (including via the extension point above),
+        // so the deferred data query can run with the validated ORDER BY
+        $this->loadData();
 
         $s = "\n";
 
@@ -1351,9 +1376,7 @@ class rex_list implements rex_url_provider_interface
         return $s;
     }
 
-    /**
-     * @return void
-     */
+    /** @return void */
     public function show()
     {
         echo $this->get();

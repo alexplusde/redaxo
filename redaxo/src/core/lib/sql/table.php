@@ -3,6 +3,10 @@
 /**
  * Class to represent sql tables.
  *
+ * To persist changes, choose the right method:
+ * - {@see ensure()} when the object describes the complete table (create-or-migrate, enforces column order).
+ * - {@see alter()} for incremental changes to an existing table (e.g. just a few `ensureColumn()` calls).
+ *
  * @author gharlan
  *
  * @package redaxo\core\sql
@@ -14,6 +18,15 @@ class rex_sql_table
     }
 
     public const FIRST = 'FIRST '; // The space is intended: column names cannot end with space
+
+    /** @var array<string, array{int, int}> Default display width of integer types, signed and unsigned */
+    private const INT_DISPLAY_WIDTHS = [
+        'tinyint' => [4, 3],
+        'smallint' => [6, 5],
+        'mediumint' => [9, 8],
+        'int' => [11, 10],
+        'bigint' => [20, 20],
+    ];
 
     private int $db;
     private rex_sql $sql;
@@ -53,9 +66,7 @@ class rex_sql_table
 
     private static ?string $explicitCharset = null;
 
-    /**
-     * @param positive-int $db
-     */
+    /** @param positive-int $db */
     private function __construct(string $name, int $db = 1)
     {
         $this->db = $db;
@@ -80,21 +91,27 @@ class rex_sql_table
         foreach ($columns as $column) {
             $type = $column['type'];
 
-            // Since MySQL 8.0.17 the display width for integer columns is deprecated.
-            // To be compatible with our code for MySQL 5 and MariaDB we simulate the max display width.
+            // Since MySQL 8.0.17 the display width for integer columns is deprecated and it is not
+            // reported anymore. To be compatible with our code for MySQL 5 and MariaDB we simulate
+            // the max display width. `tinyint(1)` and zerofill columns still report their width.
             // https://dev.mysql.com/doc/refman/8.0/en/numeric-type-attributes.html
-            if ('int' === $type) {
-                $type = 'int(11)';
-            } elseif ('int unsigned' === $type) {
-                $type = 'int(10) unsigned';
+            if (preg_match('/^(tinyint|smallint|mediumint|int|bigint)( unsigned)?$/', $type, $match)) {
+                $unsigned = $match[2] ?? '';
+                [$signedWidth, $unsignedWidth] = self::INT_DISPLAY_WIDTHS[$match[1]];
+                $type = $match[1] . '(' . ('' === $unsigned ? $signedWidth : $unsignedWidth) . ')' . $unsigned;
+            }
+
+            $default = $column['default'];
+            if ("''" === $default && in_array($type, ['tinytext', 'text', 'mediumtext', 'longtext', 'tinyblob', 'blob', 'mediumblob', 'longblob'], true)) {
+                $default = '';
             }
 
             $this->columns[$column['name']] = new rex_sql_column(
                 $column['name'],
                 $type,
                 'YES' === $column['null'],
-                $column['default'],
-                $column['extra'] ?: null,
+                rex_sql_column::normalizeDefault($type, $default),
+                rex_sql_column::normalizeExtra($column['extra'] ?: null),
                 $column['comment'] ?: null,
             );
 
@@ -134,12 +151,19 @@ class rex_sql_table
             $this->indexesExisting[$indexName] = $indexName;
         }
 
+        // KEY_COLUMN_USAGE spans all schemas and also lists unique/primary keys, so the join must be qualified.
+        // INFORMATION_SCHEMA gives no ordering guarantee, and the column order of a composite key ends up in the DDL.
         /** @var list<array{CONSTRAINT_NAME: string, COLUMN_NAME: string, REFERENCED_TABLE_NAME: string, REFERENCED_COLUMN_NAME: string, UPDATE_RULE: rex_sql_foreign_key::*, DELETE_RULE: rex_sql_foreign_key::*}> $foreignKeyParts */
         $foreignKeyParts = $this->sql->getArray('
             SELECT c.CONSTRAINT_NAME, c.REFERENCED_TABLE_NAME, c.UPDATE_RULE, c.DELETE_RULE, k.COLUMN_NAME, k.REFERENCED_COLUMN_NAME
             FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS c
-            INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k ON c.CONSTRAINT_NAME = k.CONSTRAINT_NAME
-            WHERE c.CONSTRAINT_SCHEMA = DATABASE() AND c.TABLE_NAME = ?', [$name]);
+            INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE k
+                ON c.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+                AND c.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+                AND c.TABLE_NAME = k.TABLE_NAME
+                AND k.POSITION_IN_UNIQUE_CONSTRAINT IS NOT NULL
+            WHERE c.CONSTRAINT_SCHEMA = DATABASE() AND c.TABLE_NAME = ?
+            ORDER BY c.CONSTRAINT_NAME, k.ORDINAL_POSITION', [$name]);
         $foreignKeys = [];
         foreach ($foreignKeyParts as $part) {
             $foreignKeys[$part['CONSTRAINT_NAME']][] = $part;
@@ -189,17 +213,13 @@ class rex_sql_table
         self::baseClearInstance($key);
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public function exists()
     {
         return !$this->new;
     }
 
-    /**
-     * @return string
-     */
+    /** @return string */
     public function getName()
     {
         return $this->name;
@@ -241,9 +261,7 @@ class rex_sql_table
         return $this->columns[$name];
     }
 
-    /**
-     * @return array<string, rex_sql_column>
-     */
+    /** @return array<string, rex_sql_column> */
     public function getColumns()
     {
         return $this->columns;
@@ -294,9 +312,7 @@ class rex_sql_table
         return $this;
     }
 
-    /**
-     * @return $this
-     */
+    /** @return $this */
     public function ensurePrimaryIdColumn()
     {
         return $this
@@ -373,9 +389,7 @@ class rex_sql_table
         return $this;
     }
 
-    /**
-     * @return non-empty-list<string>|null Column names
-     */
+    /** @return non-empty-list<string>|null Column names */
     public function getPrimaryKey()
     {
         return $this->primaryKey ?: null;
@@ -429,17 +443,13 @@ class rex_sql_table
         return $this->indexes[$name];
     }
 
-    /**
-     * @return array<string, rex_sql_index>
-     */
+    /** @return array<string, rex_sql_index> */
     public function getIndexes()
     {
         return $this->indexes;
     }
 
-    /**
-     * @return $this
-     */
+    /** @return $this */
     public function addIndex(rex_sql_index $index)
     {
         $name = $index->getName();
@@ -453,9 +463,7 @@ class rex_sql_table
         return $this;
     }
 
-    /**
-     * @return $this
-     */
+    /** @return $this */
     public function ensureIndex(rex_sql_index $index)
     {
         $name = $index->getName();
@@ -546,17 +554,13 @@ class rex_sql_table
         return $this->foreignKeys[$name];
     }
 
-    /**
-     * @return array<string, rex_sql_foreign_key>
-     */
+    /** @return array<string, rex_sql_foreign_key> */
     public function getForeignKeys()
     {
         return $this->foreignKeys;
     }
 
-    /**
-     * @return $this
-     */
+    /** @return $this */
     public function addForeignKey(rex_sql_foreign_key $foreignKey)
     {
         $name = $foreignKey->getName();
@@ -570,9 +574,7 @@ class rex_sql_table
         return $this;
     }
 
-    /**
-     * @return $this
-     */
+    /** @return $this */
     public function ensureForeignKey(rex_sql_foreign_key $foreignKey)
     {
         $name = $foreignKey->getName();
@@ -641,6 +643,18 @@ class rex_sql_table
 
     /**
      * Ensures that the table exists with the given definition.
+     *
+     * Use this only when the object describes the **complete** desired table: a non-existing table is created,
+     * an existing one is migrated to match. This also enforces the column order based on the order in which the
+     * columns were added/ensured, so existing columns may be reordered to fit.
+     *
+     * Note: columns are never dropped implicitly just because they are missing from the definition — a column is
+     * only dropped when you explicitly call {@see removeColumn()}. Same for indexes and foreign keys.
+     *
+     * Do **not** use this when you only added/changed individual columns of an existing table (e.g. a few
+     * `ensureColumn()` calls) without describing the full table — that would reorder the existing columns.
+     * Use {@see alter()} for such incremental changes instead.
+     *
      * @return void
      */
     public function ensure()
@@ -752,7 +766,15 @@ class rex_sql_table
     }
 
     /**
-     * Alters the table.
+     * Applies the pending changes to an existing table.
+     *
+     * Use this for **incremental** modifications of an existing table (add/change/drop individual columns,
+     * indexes or foreign keys, rename the table). Only the changes you explicitly made are applied; untouched
+     * columns keep their current position. Newly added columns without an explicit position are appended at the end.
+     *
+     * Unlike {@see ensure()}, this does **not** enforce the full column order, which is exactly what you want when
+     * you did not describe the complete table. The table must already exist (otherwise a `rex_exception` is thrown);
+     * to create-or-migrate from a full definition use {@see ensure()}.
      *
      * @throws rex_exception
      * @return void
@@ -920,10 +942,7 @@ class rex_sql_table
         $default = $column->getDefault();
         if (null === $default) {
             $default = '';
-        } elseif (
-            in_array(strtolower($column->getType()), ['timestamp', 'datetime'], true)
-            && in_array(strtolower($default), ['current_timestamp', 'current_timestamp()'], true)
-        ) {
+        } elseif ($column->hasCurrentTimestampDefault()) {
             $default = 'DEFAULT ' . $default;
         } else {
             $default = 'DEFAULT ' . $this->sql->escape($default);

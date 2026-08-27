@@ -5,8 +5,8 @@ use Psr\Log\LogLevel;
 // don't use REX_MIN_PHP_VERSION or rex_setup::MIN_* constants here!
 // while updating the core, the constants contain the old min versions from previous core version
 
-if (PHP_VERSION_ID < 80100) {
-    throw new rex_functional_exception(rex_i18n::msg(rex_string::versionCompare(rex::getVersion(), '5.14.0-dev', '<') ? 'setup_301' : 'setup_201', PHP_VERSION, '8.1'));
+if (PHP_VERSION_ID < 80300) {
+    throw new rex_functional_exception(rex_i18n::msg(rex_string::versionCompare(rex::getVersion(), '5.14.0-dev', '<') ? 'setup_301' : 'setup_201', PHP_VERSION, '8.3'));
 }
 
 $minExtensions = ['ctype', 'fileinfo', 'filter', 'iconv', 'intl', 'mbstring', 'pcre', 'pdo', 'pdo_mysql', 'session', 'tokenizer'];
@@ -39,14 +39,20 @@ if (rex_string::versionCompare($dbVersion, $minVersion, '<')) {
 
 // Since R5.7 we require at least R5.4 because of some `rex_sql_table` and `rex_sql::addRecord` usages in core addons
 if (rex_string::versionCompare(rex::getVersion(), '5.6', '<')) {
-    throw new rex_functional_exception(sprintf('The REDAXO version "%s" is too old for this update, please update to 5.6.5 before.', rex::getVersion()));
+    throw new rex_functional_exception(sprintf('The REDAXO version "%s" is too old for this update, please update to 5.6.5 before.', rex_escape(rex::getVersion())));
 }
 
-// Installer >= 2.9.2 required because of https://github.com/redaxo/redaxo/pull/4922
+// Installer >= 2.9.2 required because of https://github.com/redaxo/core/pull/4922
 // (Installer < 2.9.0 also works, because it does not contain the bug)
 $installerVersion = rex_addon::get('install')->getVersion();
 if (rex_string::versionCompare($installerVersion, '2.9.2', '<') && rex_string::versionCompare($installerVersion, '2.9.0', '>=')) {
     throw new rex_functional_exception('This update requires at least version <b>2.9.2</b> of the <b>install</b> addon!');
+}
+
+// https://github.com/redaxo/core/pull/6305
+$urlAddon = rex_addon::get('url');
+if ($urlAddon->isInstalled() && rex_string::versionCompare($urlAddon->getVersion(), '2.2.1', '<')) {
+    throw new rex_functional_exception('This update is not compatible to older versions of the <b>url</b> addon, it requires at least version <b>2.2.1</b>!');
 }
 
 $sessionKey = (string) rex::getProperty('instname') . '_backend';

@@ -110,9 +110,7 @@ abstract class rex_api_function
         return null;
     }
 
-    /**
-     * @param class-string<self> $class
-     */
+    /** @param class-string<self> $class */
     public static function register(string $name, string $class): void
     {
         self::$functions[$name] = $class;
@@ -201,7 +199,7 @@ abstract class rex_api_function
                 try {
                     $result = $apiFunc->execute();
 
-                    if (!($result instanceof rex_api_result)) {
+                    if (!$result instanceof rex_api_result) {
                         throw new rex_exception('Illegal result returned from api-function ' . rex_get(self::REQ_CALL_PARAM) . '. Expected a instance of rex_api_result but got "' . get_debug_type($result) . '".');
                     }
 
@@ -229,9 +227,7 @@ abstract class rex_api_function
         }
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public static function hasMessage()
     {
         $apiFunc = self::factory();
@@ -266,9 +262,7 @@ abstract class rex_api_function
         return '<div id="rex-message-container">' . $message . '</div>';
     }
 
-    /**
-     * @return rex_api_result|null
-     */
+    /** @return rex_api_result|null */
     public function getResult()
     {
         return $this->result;
@@ -322,6 +316,8 @@ class rex_api_result
     /**
      * @param bool $succeeded flag indicating if the api function was executed successfully
      * @param string|null $message optional message which will be visible to the end-user
+     *
+     * @psalm-taint-sink html $message
      */
     public function __construct(
         private $succeeded,
@@ -337,17 +333,13 @@ class rex_api_result
         $this->requiresReboot = $requiresReboot;
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public function requiresReboot()
     {
         return $this->requiresReboot;
     }
 
-    /**
-     * @return string|null
-     */
+    /** @return string|null */
     public function getFormattedMessage()
     {
         if (null === $this->message) {
@@ -380,9 +372,7 @@ class rex_api_result
         return $this->succeeded;
     }
 
-    /**
-     * @return string
-     */
+    /** @return string */
     public function toJSON()
     {
         return rex_type::string(json_encode([
@@ -420,4 +410,11 @@ class rex_api_result
  *
  * @package redaxo\core
  */
-class rex_api_exception extends rex_exception {}
+class rex_api_exception extends rex_exception
+{
+    /** @psalm-taint-sink html $message */
+    public function __construct(string $message, ?Exception $previous = null)
+    {
+        parent::__construct($message, $previous);
+    }
+}

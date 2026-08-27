@@ -14,9 +14,7 @@ class rex_setup
     public const MIN_MYSQL_VERSION = '5.6';
     public const MIN_MARIADB_VERSION = '10.1';
 
-    /**
-     * no-password placeholder required to support empty passwords/clearing the password.
-     */
+    /** no-password placeholder required to support empty passwords/clearing the password. */
     public const DEFAULT_DUMMY_PASSWORD = '-REDAXO-DEFAULT-DUMMY-PASSWORD-';
 
     public const DB_MODE_SETUP_NO_OVERRIDE = 0;
@@ -198,6 +196,7 @@ class rex_setup
             '8.2' => '2026-12-01',
             '8.3' => '2027-12-01',
             '8.4' => '2028-12-01',
+            '8.5' => '2029-12-01',
         ];
 
         $versionNumber = rex_formatter::version(PHP_VERSION, '%s.%s');
@@ -246,6 +245,11 @@ class rex_setup
                 '11.3' => '2024-05-01',
                 '11.4' => '2029-05-01', // LTS
                 '11.5' => '2024-11-01',
+                '11.6' => '2025-02-01',
+                '11.7' => '2025-05-01',
+                '11.8' => '2028-06-01',
+                '12.0' => '2025-11-01',
+                '12.1' => '2026-02-01',
             ];
 
             $versionNumber = rex_formatter::version($dbVersion, '%s.%s');
@@ -268,6 +272,10 @@ class rex_setup
                 '8.4' => '2032-04-01',
                 '9.0' => '2024-10-01',
                 '9.1' => '2025-01-01',
+                '9.2' => '2025-04-01',
+                '9.3' => '2025-07-01',
+                '9.4' => '2025-10-01',
+                '9.5' => '2026-01-01',
             ];
 
             $versionNumber = rex_formatter::version($dbVersion, '%s.%s');
@@ -311,9 +319,7 @@ class rex_setup
         }
     }
 
-    /**
-     * @return string|false Single-User-Setup URL or `false` on failure
-     */
+    /** @return string|false Single-User-Setup URL or `false` on failure */
     public static function startWithToken()
     {
         $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
@@ -382,9 +388,7 @@ class rex_setup
         return $context;
     }
 
-    /**
-     * Mark the setup as completed.
-     */
+    /** Mark the setup as completed. */
     public static function markSetupCompleted(): bool
     {
         $configFile = rex_path::coreData('config.yml');

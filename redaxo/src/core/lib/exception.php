@@ -5,9 +5,7 @@
  */
 class rex_exception extends Exception
 {
-    /**
-     * @param string $message
-     */
+    /** @param string $message */
     public function __construct($message, ?Exception $previous = null)
     {
         parent::__construct($message, 0, $previous);
@@ -29,17 +27,13 @@ class rex_sql_exception extends rex_exception
         $this->sql = $sql;
     }
 
-    /**
-     * @return rex_sql|null
-     */
+    /** @return rex_sql|null */
     public function getSql()
     {
         return $this->sql;
     }
 
-    /**
-     * Returns the mysql native error code.
-     */
+    /** Returns the mysql native error code. */
     public function getErrorCode(): ?int
     {
         $previous = $this->getPrevious();
@@ -62,7 +56,14 @@ class rex_sql_could_not_connect_exception extends rex_sql_exception {}
  *
  * @package redaxo\core
  */
-class rex_functional_exception extends rex_exception {}
+class rex_functional_exception extends rex_exception
+{
+    /** @psalm-taint-sink html $message */
+    public function __construct(string $message, ?Exception $previous = null)
+    {
+        parent::__construct($message, $previous);
+    }
+}
 
 /**
  * Exception class for http-status code handling.
@@ -74,18 +75,14 @@ class rex_http_exception extends rex_exception
     /** @var string */
     private $httpCode;
 
-    /**
-     * @param string $httpCode
-     */
+    /** @param string $httpCode */
     public function __construct(Exception $cause, $httpCode)
     {
         parent::__construct($cause->getMessage(), $cause);
         $this->httpCode = $httpCode;
     }
 
-    /**
-     * @return string
-     */
+    /** @return string */
     public function getHttpCode()
     {
         return $this->httpCode;

@@ -1,6 +1,22 @@
 Changelog
 =========
 
+Version 2.10.0 – 09.04.2026
+---------------------------
+
+### Neu
+
+* Backup-Cronjob: Ältere Backups können nach auswählbarem Zeitraum komplett gelöscht werden (@gharlan)
+
+
+Version 2.9.4 – 05.01.2026
+--------------------------
+
+### Security
+
+* Path Traversal beim Datei-Export verhindert (gemeldet von @lukasz-rybak) (@gharlan)
+
+
 Version 2.9.1 – 09.02.2024
 --------------------------
 

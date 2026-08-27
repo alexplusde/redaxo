@@ -1,6 +1,30 @@
 Changelog
 =========
 
+Version 2.14.2 – 31.07.2026
+---------------------------
+
+### Security
+
+* Fehlende CSRF-Prüfung beim Speichern der Einstellungen ergänzt (@gharlan)
+
+
+Version 2.14.1 – 29.06.2026
+---------------------------
+
+### Security
+
+* CSRF-Schutz für Addon-Update-ApiFunction fehlte (gemeldet von @de3erve-hunter) (@gharlan)
+
+
+Version 2.14.0 – 09.04.2026
+---------------------------
+
+### Bugfixes
+
+* Layout der verfügbaren Core-Versionen an Layout der Addon-Versionen angepasst (@gharlan)
+
+
 Version 2.13.1 – 05.09.2025
 ---------------------------
 

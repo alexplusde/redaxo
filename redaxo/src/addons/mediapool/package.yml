@@ -1,7 +1,7 @@
 package: mediapool
-version: '2.17.1'
+version: '2.18.4'
 author: 'Jan Kristinus'
-supportpage: https://github.com/redaxo/redaxo
+supportpage: https://github.com/redaxo/core
 
 rows_per_page: 100
 
@@ -29,7 +29,7 @@ allowed_mime_types:
     jpeg: [image/jpeg, image/pjpeg]
     png: [image/png]
     webp: [image/webp]
-    eps: [application/postscript]
+    eps: [application/postscript, image/x-eps]
     tif: [image/tiff]
     tiff: [image/tiff]
     svg: [image/svg+xml]
@@ -48,7 +48,10 @@ allowed_mime_types:
     ppsx: [application/vnd.openxmlformats-officedocument.presentationml.slideshow]
     rtf: [application/rtf]
     txt: [text/plain, application/octet-stream]
-    csv: [text/plain, text/csv, application/octet-stream]
+    md: [text/markdown]
+    csv: [text/csv, application/octet-stream]
+    ics: [text/calendar]
+    vcf: [text/vcard]
     srt: [text/plain]
     vtt: [text/vtt]
     zip: [application/x-zip-compressed, application/zip]
@@ -67,5 +70,5 @@ image_extensions: [avif, bmp, gif, jpeg, jpg, png, svg, tif, tiff, webp]
 sanitize_svgs: true
 
 requires:
-    php: '>=8.1'
+    php: '>=8.3'
     redaxo: ^5.18.2

@@ -1,6 +1,22 @@
 Changelog
 =========
 
+Version 2.12.1 – 31.07.2026
+---------------------------
+
+### Security
+
+* Beim Aktualisieren eines Benutzers wurde die CSRF-Prüfung übersprungen, wenn der Parameter `save` fehlte (gemeldet von @V-C-Williams) (@gharlan)
+
+
+Version 2.12.0 – 09.04.2026
+---------------------------
+
+### Neu
+
+* Suche für Benutzerverwaltung (@akuehnis)
+
+
 Version 2.10.0 – 28.02.2023
 ---------------------------
 

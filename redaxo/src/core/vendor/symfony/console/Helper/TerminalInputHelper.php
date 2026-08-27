@@ -37,29 +37,36 @@ final class TerminalInputHelper
     /** @var resource */
     private $inputStream;
     private bool $isStdin;
-    private string $initialState;
+    private string $initialState = '';
     private int $signalToKill = 0;
     private array $signalHandlers = [];
     private array $targetSignals = [];
+    private bool $withStty;
 
     /**
      * @param resource $inputStream
      *
      * @throws \RuntimeException If unable to read terminal settings
      */
-    public function __construct($inputStream)
+    public function __construct($inputStream, bool $withStty = true)
     {
-        if (!\is_string($state = shell_exec('stty -g'))) {
-            throw new \RuntimeException('Unable to read the terminal settings.');
-        }
         $this->inputStream = $inputStream;
-        $this->initialState = $state;
         $this->isStdin = 'php://stdin' === stream_get_meta_data($inputStream)['uri'];
-        $this->createSignalHandlers();
+        $this->withStty = $withStty;
+
+        if ($withStty) {
+            if (!\is_string($state = shell_exec('stty -g'))) {
+                throw new \RuntimeException('Unable to read the terminal settings.');
+            }
+
+            $this->initialState = trim($state);
+
+            $this->createSignalHandlers();
+        }
     }
 
     /**
-     * Waits for input and terminates if sent a default signal.
+     * Waits for input.
      */
     public function waitForInput(): void
     {
@@ -67,14 +74,15 @@ final class TerminalInputHelper
             $r = [$this->inputStream];
             $w = [];
 
-            // Allow signal handlers to run, either before Enter is pressed
-            // when icanon is enabled, or a single character is entered when
-            // icanon is disabled
+            // Allow signal handlers to run
             while (0 === @stream_select($r, $w, $w, 0, 100)) {
                 $r = [$this->inputStream];
             }
         }
-        $this->checkForKillSignal();
+
+        if ($this->withStty) {
+            $this->checkForKillSignal();
+        }
     }
 
     /**
@@ -82,9 +90,19 @@ final class TerminalInputHelper
      */
     public function finish(): void
     {
+        if (!$this->withStty) {
+            return;
+        }
+
         // Safeguard in case an unhandled kill signal exists
         $this->checkForKillSignal();
-        shell_exec('stty '.$this->initialState);
+
+        // The captured "stty -g" state is not guaranteed to be accepted back by "stty" on every
+        // platform/terminal (e.g. some nested pty implementations reject it with "invalid argument"),
+        // and shell_exec() gives no way to detect that failure. Try the exact restore first so
+        // any custom terminal settings survive, but always fall back to "stty sane" so the
+        // terminal is left in a usable state even when the exact restore silently fails.
+        shell_exec('stty '.$this->initialState.' 2>/dev/null || stty sane');
         $this->signalToKill = 0;
 
         foreach ($this->signalHandlers as $signal => $originalHandler) {
@@ -107,9 +125,12 @@ final class TerminalInputHelper
             $this->signalHandlers[$signal] = pcntl_signal_get_handler($signal);
 
             pcntl_signal($signal, function ($signal) {
-                // Save current state, then restore to initial state
+                // Save current state, then restore to initial state. The original signal
+                // handler is about to run, so fall back to "stty sane" if the exact restore
+                // is rejected by "stty" (see the same fallback in finish()), to make sure it
+                // runs with a usable terminal.
                 $currentState = shell_exec('stty -g');
-                shell_exec('stty '.$this->initialState);
+                shell_exec('stty '.$this->initialState.' 2>/dev/null || stty sane');
                 $originalHandler = $this->signalHandlers[$signal];
 
                 if (\is_callable($originalHandler)) {

@@ -268,10 +268,13 @@ class rex_file
      * Detects the mime type of the given file.
      *
      * @param string $file Path to the file
+     * @param string|null $filename Optional filename, will be used instead of `$file` for the extension-based
+     *     refinement of unspecific mime types (useful for uploaded files, whose temporary path does not contain
+     *     the original file extension)
      *
      * @return string|null Mime type or `null` if the type could not be detected
      */
-    public static function mimeType($file): ?string
+    public static function mimeType($file, ?string $filename = null): ?string
     {
         $mimeType = mime_content_type($file);
 
@@ -288,11 +291,18 @@ class rex_file
             };
         }
 
-        return match (strtolower(self::extension($file))) {
+        return match (strtolower(self::extension($filename ?: $file))) {
             'css' => 'text/css',
+            'csv' => 'text/csv',
+            'html' => 'text/html',
+            'ics' => 'text/calendar',
             'js' => 'application/javascript',
+            'json' => 'application/json',
+            'md' => 'text/markdown',
             'svg' => 'image/svg+xml',
+            'vcf' => 'text/vcard',
             'vtt' => 'text/vtt',
+            'xml' => 'text/xml',
             default => $mimeType,
         };
     }

@@ -10,9 +10,7 @@ class rex_metainfo_clang_handler extends rex_metainfo_handler
     public const PREFIX = 'clang_';
     public const CONTAINER = 'rex-clang-metainfo';
 
-    /**
-     * @return string
-     */
+    /** @return string */
     public function renderToggleButton(rex_extension_point $ep)
     {
         $fields = parent::getSqlFields(self::PREFIX);
@@ -25,12 +23,11 @@ class rex_metainfo_clang_handler extends rex_metainfo_handler
         return $ep->getSubject();
     }
 
-    /**
-     * @return array
-     */
+    /** @return array */
     public function handleSave(array $params, rex_sql $sqlFields)
     {
-        if ('post' != rex_request_method() || !isset($params['id'])) {
+        // Only save when the clang itself is saved, as only that request is protected by a csrf token.
+        if (!$params['save'] || 'post' != rex_request_method() || !isset($params['id'])) {
             return $params;
         }
 
@@ -51,9 +48,7 @@ class rex_metainfo_clang_handler extends rex_metainfo_handler
         return $params;
     }
 
-    /**
-     * @return void
-     */
+    /** @return void */
     protected function buildFilterCondition(array $params) {}
 
     public function renderFormItem($field, $tag, $tagAttr, $id, $label, $labelIt, $inputType)
@@ -68,6 +63,8 @@ class rex_metainfo_clang_handler extends rex_metainfo_handler
     public function extendForm(rex_extension_point $ep)
     {
         $params = $ep->getParams();
+        $params['save'] = in_array($ep->getName(), ['CLANG_ADDED', 'CLANG_UPDATED'], true);
+
         if (isset($params['sql'])) {
             $params['activeItem'] = $params['sql'];
         }

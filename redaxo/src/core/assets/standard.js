@@ -449,49 +449,52 @@ jQuery(function($){
         });
     $("[autofocus]").trigger("focus");
 
-    if ($('#rex-page-setup, #rex-page-login').length == 0 && getCookie('rex_htaccess_check') == '')
+    if (false !== rex.directory_protection_check && $('#rex-page-setup, #rex-page-login').length == 0 && getCookie('rex_directory_protection_check') != '1')
     {
-        time = new Date();
-        time.setTime(time.getTime() + 1000 * 60 * 60 * 24);
-
-        setCookie(
-            'rex_htaccess_check',
-            '1',
-            time.toGMTString(),
-            rex.cookie_params.path,
-            rex.cookie_params.domain,
-            rex.cookie_params.secure,
-            rex.cookie_params.samesite.toLowerCase()
-        );
-
-        var allowedUrl = 'index.php';
-
-        // test urls, which is not expected to be accessible
-        // after each expected error, run a request which is expected to succeed.
-        // that way we try to make sure tools like fail2ban dont block the client
+        // urls which are not expected to be accessible
         var urls = [
             'bin/console',
-            allowedUrl,
             'data/.redaxo',
-            allowedUrl,
             'src/core/boot.php',
-            allowedUrl,
             'cache/.redaxo'
         ];
 
-        // NOTE: we have essentially a copy of this code in the setup process.
-        $.each(urls, function (i, url) {
-            $.ajax({
-                // add a human readable suffix so people get an idea what we are doing here
-                url: url + '?redaxo-security-self-test',
-                cache: false,
-                success: function (data) {
-                    if (i % 2 == 0) {
-                        $('#rex-js-page-main').prepend('<div class="alert alert-danger" style="margin-top: 20px;">The folder <code>redaxo/' + url + '</code> is insecure. Make sure this folder is not publicly accessible.</div>');
-                        setCookie('rex_htaccess_check', '');
-                    }
-                }
-            });
+        // Only one directory is checked per day. All of them are protected the same way, so a
+        // setup where that protection is missing (e.g. nginx or "AllowOverride None") shows up on
+        // any of them. Checking a single directory keeps the number of denied requests low enough
+        // to not trip tools like fail2ban, which ban a client after a few denied requests.
+        var previousInsecureUrl = getCookie('rex_directory_protection_check');
+        var url = previousInsecureUrl !== '' ? previousInsecureUrl : urls[Math.floor(Math.random() * urls.length)];
+
+        var setCheckCookie = function (value) {
+            time = new Date();
+            time.setTime(time.getTime() + 1000 * 60 * 60 * 24);
+
+            setCookie(
+                'rex_directory_protection_check',
+                value,
+                time.toGMTString(),
+                rex.cookie_params.path,
+                rex.cookie_params.domain,
+                rex.cookie_params.secure,
+                rex.cookie_params.samesite.toLowerCase()
+            );
+        };
+
+        setCheckCookie('1');
+
+        // NOTE: the setup process runs a similar check, see setup.step2.php
+        $.ajax({
+            // add a human readable suffix so people get an idea what we are doing here
+            url: url + '?redaxo-security-self-test',
+            cache: false,
+            success: function (data) {
+                $('#rex-js-page-main').prepend('<div class="alert alert-danger" style="margin-top: 20px;">The directory <code>redaxo/' + url + '</code> is insecure. Make sure this directory is not publicly accessible.</div>');
+
+                // keep checking this directory, so the warning stays visible. its request succeeds
+                // anyway, so it does not produce denied requests.
+                setCheckCookie(url);
+            }
         });
     }
 });
@@ -528,21 +531,61 @@ function getCookie(cookieName) {
     return unescape(theCookie.substring(ind + cookieName.length + 1, ind1));
 }
 
-// scroll to anchor element + adjust scroll-padding-top
+// scroll to anchor element
+// (scrollIntoView honors the CSS scroll-padding-top, so the sticky navbar
+// offset is handled automatically — no manual correction needed)
 function scrollToAnchor() {
-    if (window.location.hash) {
-        var scrollPadding = window.getComputedStyle(document.documentElement).getPropertyValue('scroll-padding-top');
-        scrollPadding = parseInt(scrollPadding, 10); // so 65px will be 65
-        if (scrollPadding > 0) {
-            var anchorItem = document.querySelector(window.location.hash);
-            if (anchorItem) {
-                var anchorItemPosition = anchorItem.getBoundingClientRect().top;
-                if (!isNaN(scrollPadding) && scrollPadding > 0 && anchorItemPosition < scrollPadding) {
-                    window.scrollBy(0, -scrollPadding);
-                }
-            }
-        }
+    if (!window.location.hash) {
+        return;
     }
+    var anchorItem = document.querySelector(window.location.hash);
+    if (!anchorItem) {
+        return;
+    }
+
+    var scrollToItem = function () {
+        anchorItem.scrollIntoView({block: 'start'});
+    };
+
+    // Defer to the next frame so the freshly swapped-in pjax content is laid
+    // out before we scroll, instead of guessing a fixed timeout.
+    requestAnimationFrame(function () {
+        requestAnimationFrame(scrollToItem);
+    });
+
+    // Images that are still loading will shift the layout once they arrive and
+    // push the anchor out of position. Re-scroll whenever one finishes, but
+    // stop as soon as the user scrolls manually so we don't hijack the page.
+    var container = anchorItem.closest('[data-pjax-container]') || document;
+    var pending = Array.prototype.filter.call(container.querySelectorAll('img'), function (img) {
+        return !img.complete;
+    });
+    if (!pending.length) {
+        return;
+    }
+
+    var remaining = pending.length;
+    var stop = function () {
+        window.removeEventListener('wheel', stop);
+        window.removeEventListener('touchstart', stop);
+        pending.forEach(function (img) {
+            img.removeEventListener('load', onImageDone);
+            img.removeEventListener('error', onImageDone);
+        });
+    };
+    var onImageDone = function () {
+        scrollToItem();
+        if (--remaining === 0) {
+            stop();
+        }
+    };
+
+    window.addEventListener('wheel', stop, {passive: true});
+    window.addEventListener('touchstart', stop, {passive: true});
+    pending.forEach(function (img) {
+        img.addEventListener('load', onImageDone);
+        img.addEventListener('error', onImageDone);
+    });
 }
 
 var rex_loader = {

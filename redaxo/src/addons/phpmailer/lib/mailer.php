@@ -22,16 +22,16 @@ class rex_mailer extends PHPMailer
     /** @var bool */
     private $archive;
 
-    /**
-     * used to store information if detour mode is enabled.
-     */
+    /** used to store information if detour mode is enabled. */
     private array $xHeader = [];
 
     public function __construct($exceptions = false)
     {
         $addon = rex_addon::get('phpmailer');
+
+        self::setLanguage(rex_i18n::getLanguage(), $addon->getPath('vendor/phpmailer/phpmailer/language/'));
+
         $this->Timeout = 10;
-        $this->setLanguage(rex_i18n::getLanguage(), $addon->getPath('vendor/phpmailer/phpmailer/language/'));
         $this->XMailer = 'REXMailer';
         $this->From = $addon->getConfig('from');
         $this->FromName = $addon->getConfig('fromname');
@@ -106,9 +106,7 @@ class rex_mailer extends PHPMailer
         return parent::addOrEnqueueAnAddress($kind, $address, $name);
     }
 
-    /**
-     * @return bool
-     */
+    /** @return bool */
     public function send()
     {
         return rex_timer::measure(__METHOD__, function () {
@@ -162,9 +160,7 @@ class rex_mailer extends PHPMailer
         $this->xHeader = []; // Bereinigung für die nächste Verwendung
     }
 
-    /**
-     * @return void
-     */
+    /** @return void */
     public function clearQueuedAddresses($kind)
     {
         parent::clearQueuedAddresses($kind);
@@ -172,9 +168,7 @@ class rex_mailer extends PHPMailer
         unset($this->xHeader[$kind]);
     }
 
-    /**
-     * @return void
-     */
+    /** @return void */
     public function clearAllRecipients()
     {
         parent::clearAllRecipients();
@@ -234,25 +228,19 @@ class rex_mailer extends PHPMailer
         rex_file::put($archiveFile, $archivedata);
     }
 
-    /**
-     * Path to mail archive folder.
-     */
+    /** Path to mail archive folder. */
     public static function logFolder(): string
     {
         return rex_path::addonData('phpmailer', 'mail_log');
     }
 
-    /**
-     * Path to log file.
-     */
+    /** Path to log file. */
     public static function logFile(): string
     {
         return rex_path::log('mail.log');
     }
 
-    /**
-     * @internal
-     */
+    /** @internal */
     public static function errorMail(): void
     {
         $addon = rex_addon::get('phpmailer');
@@ -394,12 +382,31 @@ class rex_mailer extends PHPMailer
         }
 
         $customHeaders = [];
+        $extendedProperties = [];
         /** @var array{string, string} $header */
         foreach ($this->getCustomHeaders() as $header) {
-            $customHeaders[] = [
-                'name' => $header[0],
-                'value' => $this->encodeHeader(trim($header[1])),
-            ];
+            $name = trim($header[0]);
+            $value = trim($header[1]);
+
+            if (str_starts_with(strtolower($name), 'x-')) {
+                $customHeaders[] = [
+                    'name' => $name,
+                    'value' => $this->encodeHeader($value),
+                ];
+                continue;
+            }
+
+            if ('list-unsubscribe' === strtolower($name)) {
+                // MAPI property PidTagListUnsubscribe; Exchange emits it as List-Unsubscribe header
+                $extendedProperties[] = [
+                    'id' => 'String 0x1045',
+                    'value' => $value,
+                ];
+                continue;
+            }
+
+            // The Graph API rejects the whole request for custom headers without "x-" prefix,
+            // so headers without a MAPI mapping (e.g. Auto-Submitted) have to be dropped
         }
 
         // Attachments für Graph API aufbereiten
@@ -481,6 +488,9 @@ class rex_mailer extends PHPMailer
         }
         if (!empty($customHeaders)) {
             $mailData['message']['internetMessageHeaders'] = $customHeaders;
+        }
+        if (!empty($extendedProperties)) {
+            $mailData['message']['singleValueExtendedProperties'] = $extendedProperties;
         }
         if ('' !== $this->ConfirmReadingTo) {
             // MS Graph API unterstützt keine Read-Receipts an beliebige Empfänger

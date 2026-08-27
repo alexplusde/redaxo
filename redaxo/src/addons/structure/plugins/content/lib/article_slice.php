@@ -53,6 +53,36 @@ class rex_article_slice
     ) {}
 
     /** @internal  */
+    public static function forNewSlice(
+        int $articleId,
+        int $clang,
+        int $ctype,
+        int $moduleId,
+        int $priority,
+        int $revision,
+    ): self {
+        return new self(
+            0,
+            $articleId,
+            $clang,
+            $ctype,
+            $moduleId,
+            $priority,
+            1,
+            $time = time(),
+            $time,
+            $user = rex::requireUser()->getLogin(),
+            $user,
+            $revision,
+            array_fill(0, 20, null),
+            array_fill(0, 10, null),
+            array_fill(0, 10, null),
+            array_fill(0, 10, null),
+            array_fill(0, 10, null),
+        );
+    }
+
+    /** @internal  */
     public static function fromSql(rex_sql $sql): self
     {
         $table = rex::getTable('article_slice');
@@ -295,9 +325,7 @@ class rex_article_slice
         return $slices;
     }
 
-    /**
-     * @return rex_article
-     */
+    /** @return rex_article */
     public function getArticle()
     {
         $article = rex_article::get($this->getArticleId());
@@ -413,9 +441,7 @@ class rex_article_slice
         return $this->linklists[$index - 1];
     }
 
-    /**
-     * @return list<int>|null
-     */
+    /** @return list<int>|null */
     public function getLinkListArray(int $index): ?array
     {
         $list = $this->linklists[$index - 1];
@@ -456,9 +482,7 @@ class rex_article_slice
         return $this->medialists[$index - 1];
     }
 
-    /**
-     * @return list<string>|null
-     */
+    /** @return list<string>|null */
     public function getMediaListArray(int $index): ?array
     {
         $list = $this->medialists[$index - 1];

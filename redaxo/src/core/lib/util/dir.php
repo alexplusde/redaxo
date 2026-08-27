@@ -30,7 +30,14 @@ class rex_dir
             return false;
         }
 
-        if (self::isWritable($parent) && mkdir($dir, rex::getDirPerm())) {
+        if (!self::isWritable($parent)) {
+            return false;
+        }
+
+        // suppress "File exists" warning in case of concurrent processes
+        @mkdir($dir, rex::getDirPerm());
+
+        if (is_dir($dir)) {
             @chmod($dir, rex::getDirPerm());
             return true;
         }
@@ -101,7 +108,7 @@ class rex_dir
             return true;
         }
 
-        if (!self::deleteIterator(rex_finder::factory($dir)->recursive()->childFirst()->ignoreSystemStuff(false))) {
+        if (!self::deleteIterator(rex_finder::factory($dir)->recursive()->childFirst()->ignoreSystemStuff(false)->ignoreUnreadableDirs())) {
             return false;
         }
 
@@ -119,7 +126,7 @@ class rex_dir
      */
     public static function deleteFiles($dir, $recursive = true)
     {
-        $iterator = rex_finder::factory($dir)->recursive($recursive)->filesOnly()->ignoreSystemStuff(false);
+        $iterator = rex_finder::factory($dir)->recursive($recursive)->filesOnly()->ignoreSystemStuff(false)->ignoreUnreadableDirs();
         return self::deleteIterator($iterator);
     }
 

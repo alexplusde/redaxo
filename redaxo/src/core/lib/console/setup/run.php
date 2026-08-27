@@ -68,7 +68,7 @@ class rex_command_setup_run extends rex_console_command implements rex_command_o
          *     servername: string|null,
          *     error_email: string|null,
          *     timezone: string|null,
-         *     db: array{1: array{
+         *     db: array{1?: array{
          *         host: string|null,
          *         login: string|null,
          *         password: string|null,
@@ -103,7 +103,7 @@ class rex_command_setup_run extends rex_console_command implements rex_command_o
         ksort($langs);
 
         $config['lang'] = $this->getOptionOrAsk(
-            new ChoiceQuestion('Please select a language', $langs, $config['lang'] ?? null),
+            new ChoiceQuestion('Please select a language', $langs, $config['lang']),
             'lang',
             null,
             'Language "%s" selected.',
@@ -179,32 +179,48 @@ class rex_command_setup_run extends rex_console_command implements rex_command_o
 
         $io->section('Database information');
 
+        $previousHost = $config['db'][1]['host'] ?? null;
+        $previousLogin = $config['db'][1]['login'] ?? null;
+        $previousPassword = $config['db'][1]['password'] ?? null;
+
         do {
             $config['db'][1]['host'] = $this->getOptionOrAsk(
                 'MySQL Host',
                 'db-host',
-                $config['db'][1]['host'],
+                $previousHost,
                 'Using MySQL Host "%s"',
                 $requiredValue,
             );
             $config['db'][1]['login'] = $this->getOptionOrAsk(
                 'Login',
                 'db-login',
-                $config['db'][1]['login'],
+                $previousLogin,
                 'Using database login "%s"',
                 $requiredValue,
             );
 
-            $q = new Question('Password');
-            $q->setHidden(true);
+            $keepPassword = false;
+            if ($previousPassword
+                && $config['db'][1]['host'] === $previousHost
+                && $config['db'][1]['login'] === $previousLogin
+                && null === $input->getOption('db-password')
+                && $input->isInteractive()
+            ) {
+                $keepPassword = $io->confirm('Keep existing database password?', true);
+            }
 
-            $config['db'][1]['password'] = $this->getOptionOrAsk(
-                $q,
-                'db-password',
-                '',
-                'Using database password *secret*',
-                null,
-            );
+            if (!$keepPassword) {
+                $q = new Question('Password');
+                $q->setHidden(true);
+
+                $config['db'][1]['password'] = (string) $this->getOptionOrAsk(
+                    $q,
+                    'db-password',
+                    '',
+                    'Using database password *secret*',
+                    null,
+                );
+            }
 
             $config['db'][1]['name'] = $this->getOptionOrAsk(
                 'Database name',
@@ -546,9 +562,7 @@ class rex_command_setup_run extends rex_console_command implements rex_command_o
         return 0;
     }
 
-    /**
-     * @return bool|string false|utf8|utf8mb4
-     */
+    /** @return bool|string false|utf8|utf8mb4 */
     private function getDbCharset()
     {
         $charset = $this->input->getOption('db-charset');
